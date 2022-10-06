@@ -2,6 +2,7 @@
 
 require("dotenv").config();
 const { Client, GatewayIntentBits } = require("discord.js");
+const { platform } = require("os");
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -11,35 +12,12 @@ const client = new Client({
   ],
 });
 
-let john = 261236642680012802;
-
-// client.on("ready", async () => {
-//   console.log("I am ready!");
-//   const guild = await client.guilds.fetch(process.env.GUILD_ID);
-//   let channels = await guild.channels.fetch();
-// });
+let john = "261236642680012802";
 
 client.once("ready", async () => {
   console.log("ready");
-  // var guild = client.guilds.cache.get("935546369832284300");
-  // if (!guild) {
-  //   try {
-  //     guild = await client.guilds.fetch("935546369832284300");
-  //   } catch (error) {
-  //     return console.log(`Error while fetching the guild: `, error);
-  //   }
-  // }
-  // var member = guild.members.cache.get("935648165636481084");
-  // if (!member) {
-  //   try {
-  //     member = await guild.members.fetch(`935648165636481084`);
-  //   } catch (error) {
-  //     return console.log(`Error while fetching the member: `, error);
-  //   }
-  // }
-  // console.log(member);
 });
-
+const adminData = require("./admins.json");
 client.on("messageCreate", (message) => {
   // console.log(message);
   if (
@@ -55,10 +33,51 @@ client.on("messageCreate", (message) => {
   ) {
     let text = message.content.split(" ");
     handle_leaderboard(message, text[1] === "weekly");
+  } else if (
+    message.channel.name === "sniper" &&
+    message.content.startsWith("!admin") &&
+    (message.author.id === john ||
+      (adminData[message.guildId] !== undefined &&
+        adminData[message.guildId][message.author.id] === 1))
+  ) {
+    let text = message.content.split(" ");
+    handle_admin(message, text[1] === "add");
+  } else if (
+    message.channel.name === "sniper" &&
+    message.content.startsWith("!admin") &&
+    message.author.id !== john &&
+    (adminData[message.guildId] === undefined ||
+      adminData[message.guildId][message.author.id] !== 1)
+  ) {
+    message.channel.send("nice try");
+  } else if (
+    message.channel.name === "sniper" &&
+    message.content.startsWith("!reset") &&
+    (message.author.id === john ||
+      (adminData[message.guildId] !== undefined &&
+        adminData[message.guildId][message.author.id] === 1))
+  ) {
   }
 });
 
-function handle_snipe(message) {
+async function handle_admin(message, add) {
+  const adminData = require("./admins.json");
+  message.mentions.users.forEach((person) => {
+    if (!adminData[message.guildId]) {
+      adminData[message.guildId] = {};
+    }
+    adminData[message.guildId][person.id] = add ? 1 : 0;
+  });
+  const channel = message.channel;
+  channel.send(add ? "admin added" : "admin removed");
+  var fs = require("fs");
+  fs.writeFile("admin.json", JSON.stringify(adminData), function (err) {
+    if (err) throw err;
+    console.log("complete");
+  });
+}
+
+async function handle_snipe(message) {
   const scoreData = require("./scores.json");
   if (!scoreData[message.guildId]) {
     scoreData[message.guildId] = {};
@@ -116,6 +135,37 @@ function handle_snipe(message) {
     if (err) throw err;
     console.log("complete");
   });
+
+  let topId = undefined;
+  let topScore = 0;
+
+  for (p in scoreData[message.guildId]) {
+    console.log(p);
+    if (scoreData[message.guildId][p].score > topScore) {
+      topScore = scoreData[message.guildId][p].score;
+      topId = p;
+    }
+  }
+  console.log(topScore);
+  console.log(topId);
+
+  let role = await message.guild.roles.cache.find(
+    (role) => role.name === "sniper master"
+  );
+  console.log(role);
+
+  if (message.author.id === topId) {
+    await message.guild.members.fetch();
+    const users = await message.guild.roles.cache
+      .get(role.id)
+      .members.map((m) => m.user.id);
+
+    for (userId in users) {
+      member = await message.guild.members.fetch(users[userId]);
+      member.roles.remove(role);
+    }
+    await message.member.roles.add(role);
+  }
   message.react("✅");
 }
 
